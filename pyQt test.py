@@ -24,6 +24,7 @@ from collections import OrderedDict
 pg.setConfigOptions(antialias=True)
 
 
+## SEE https://www.pythonguis.com/tutorials/multithreading-pyqt6-applications-qthreadpool/ FOR EXPLANATION OF THESE CLASSES ###
 class WorkerSignals(QObject):
     '''
     Defines the signals available from a running worker thread.
@@ -79,8 +80,9 @@ class Worker(QRunnable):
         finally:
             self.signals.finished.emit()  # Done
 
+####                                                                  #########
 
-# Subclass QMainWindow to customize your application's main window
+# The main window of the application
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -102,13 +104,7 @@ class MainWindow(QMainWindow):
         main_layout.setColumnStretch(0,3)
         main_layout.setContentsMargins(20,20,20,20)
 
-        # # The graphing window
-        # self.graph = GraphWindow()
-
-        # graphbt = QPushButton("Show Graph")
-        # graphbt.clicked.connect(self.show_graph)
-
-        # layout.addWidget(graphbt, 1,0)
+        # Setup parameters inputs
 
         param_layout.addWidget(QLabel("<span style='font-size:20px;'>Program and experiment parameters</span>",), 0,0,1,2)
 
@@ -120,6 +116,8 @@ class MainWindow(QMainWindow):
         program_layout = QGridLayout()
         param_layout.addLayout(program_layout, 1,0,1,3)
 
+
+        ## WARNING: THIS SHOULD BE AUTOMATED WHEN ALLOWING DIFFERENT LAYERS
         self.parameters = OrderedDict()
         #                              Density,              L_p,             EV,                S,              W
         self.parameters["Surface"] = [None,              QDoubleSpinBox(), None,     QDoubleSpinBox(), QDoubleSpinBox()]
@@ -210,7 +208,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
 
         self.toolbar = self.menuBar()
-        # self.addToolBar(self.toolbar)
 
         save_params = QAction("Save parameters", self)
         save_params.triggered.connect(self.save_params)
@@ -225,13 +222,20 @@ class MainWindow(QMainWindow):
         self.remodel = True
         self.model = Model()
 
+        # For async modeling
         self.threadpool = QThreadPool()
 
     def new_data_file(self, fn):
+        """
+        Change the experimental data to the selected data file
+        """
         self.exp_data_path = fn
         self.program_param_changed()
 
     def save_params(self):
+        """
+        Export the parameters to parameters.csv (could be user determined in the future)
+        """
         export = np.zeros((len(self.parameters.keys()), 5))
         header = []
         i = 0
@@ -253,6 +257,9 @@ class MainWindow(QMainWindow):
         np.savetxt("parameters.csv", export, delimiter=",")
 
     def load_params(self):
+        """
+        Import parameters from parameters.txt (could be file picker in the future)
+        """
         imp = np.loadtxt("parameters.csv", delimiter=",")
 
         i = 0
@@ -269,9 +276,17 @@ class MainWindow(QMainWindow):
             i+=1
 
     def remodel_necessary(self):
+        """
+        When non-linear parameter changed: remodel is necessary
+        """
         self.remodel=True
 
     def update_model_params(self):
+        """
+        Gather all the data from the input fields and update the model
+
+        WARNING: THIS SHOULD BE AUTOMATED WHEN LAYERS CAN BE CUSTOMIZED
+        """
         self.model.rho = np.zeros(self.model.N+1)
         self.model.rho[self.model.Al_index] = self.parameters["Al"][0].value()
         self.model.rho[self.model.AlSio_index] = self.parameters["Al/SiO"][0].value()
@@ -299,7 +314,6 @@ class MainWindow(QMainWindow):
         self.model.EV[self.model.Si_index] = self.parameters["Si"][2].value()
         self.model.EV[-1] = 0
 
-
         self.model.S_i = np.zeros(self.model.N)
         self.model.S_surf = self.parameters["Surface"][3].value()
         self.model.S_i[self.model.Al_index] = self.parameters["Al"][3].value()
@@ -321,17 +335,25 @@ class MainWindow(QMainWindow):
         self.model.update_val()
     
     def program_param_changed(self):
+        """
+        If a complete remodel is not necessary: update the plot instantly
+        """
         if not self.remodel:
             self.start_model()
 
     def start_model(self):
+        """
+        Start the modeling process
+        """
         self.update_model_params()
 
         if self.remodel:
+            # If remodel is necessary, initiate progress bar
             self.remodel = False
             self.model_progress.show()
             self.model_progress.setMaximum(self.model.N)
 
+            # And start the asynchronous worker to execute the loop
             worker = Worker(self.model.T_ij)
             worker.signals.progress.connect(self.update_progress)
             worker.signals.finished.connect(self.finish_model)
@@ -341,9 +363,16 @@ class MainWindow(QMainWindow):
             self.finish_model()
 
     def update_progress(self, n):
+        """
+        Callback to update the progressbar
+        """
         self.model_progress.setValue(n)
 
     def finish_model(self):
+        """
+        Draw the graphs when the modeling is finished.
+        """
+
         self.model_progress.hide()
         self.model_progress.setValue(0)
 
@@ -351,6 +380,7 @@ class MainWindow(QMainWindow):
         S_e = np.zeros(len(E))
         W_e = np.zeros(len(E))
 
+        # Import the experimental results
         exp_data = np.loadtxt(self.exp_data_path, delimiter=",", skiprows=1)
         # print(exp_data.shape)
         # print(exp_data)
@@ -363,6 +393,7 @@ class MainWindow(QMainWindow):
             S_e[i] = self.model.S(E[i])
             W_e[i] = self.model.W(E[i])
 
+        # Draw the graph if not yet modelled, otherwise only update the data in the graph
         if not self.modelled:
             self.modelled = True
             pen = pg.mkPen(color="#32a852", width = 3)
@@ -382,7 +413,10 @@ class MainWindow(QMainWindow):
             self.exp_SW.setData(S_data,W_data)
 
     def fit(self):
-        print(self.fit_win)
+        """
+        Start the popup window for choosing fit parameters
+        """
+        # print(self.fit_win)
         self.fit_win = FitWindow()
         self.fit_win.show()
         # Fit S and W parameters
@@ -397,6 +431,8 @@ class MainWindow(QMainWindow):
         # poptW,pcovW = curve_fit(self.model.W_fit, E_data, W_data, bounds=(0,0.1), p0=[0.025,0.044, 0.054, 0.027, 0.027, 0.032])
         # self.start_model()
 
+
+# The class for the fit parameter popup
 class FitWindow(QWidget):
     def __init__(self):
         super().__init__()

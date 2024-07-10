@@ -15,6 +15,8 @@ class Model():
         self.n_t = np.array([1e-4] * (self.N+1))  #
         self.L_a = 1e-10 # nm
 
+        ####### WARNING: EVERYTHING BELOW SHOULD BE AUTOMATED WHEN THE LAYERS ARE CUSTOMIZABLE
+        # Set the different layer indeces
         self.Al_index = np.arange(19)
         self.AlSio_index = 19
         self.Sio_index = np.arange(20,23)
@@ -58,6 +60,8 @@ class Model():
 
         self.alpha = 1 / self.L_p**2
 
+        # Setup the process for calculating the different z boundaries
+        ##### WARNING: THIS PROCEDURE SHOULD BE AUTOMATED WHEN THE LAYERS ARE CUSTOMIZABLE
         dz = 0.6 #nm
         inc = 1.3
         self.z = [0]
@@ -73,12 +77,13 @@ class Model():
         self.z = np.array(self.z)/self.a # z -> z*
 
         # plt.figure()
-        # plt.plot(self.z[:28])
+        # plt.plot(self.z)
         # plt.show()
         # for i in range(len(self.z)):
         #     print(i, self.z[i])
         # quit()
 
+        # Also set up an energy range for plotting S and W later on
         dE = 0.2 #keV
         inc = 1.1
         self.E_space = [.1]
@@ -89,7 +94,7 @@ class Model():
 
         # self.z=np.linspace(0,1500,self.N+1)/self.a
 
-    # Definitions
+    # Definitions (see report for details)
     def gamma(self, sign, i):
         return 0.5*(self.v_d[i] + sign* self.a* ( ( self.v_d[i]/self.a)**2 + 4/self.L_p[i]**2 )**.5)
 
@@ -142,7 +147,7 @@ class Model():
         
         return 0
     
-    # Calculations matrices
+    # Calculations matrices (see report for details)
     def C(self, j):
         A = np.zeros((self.N + 1, self.N + 1))
         b = np.zeros((self.N + 1))
@@ -170,7 +175,7 @@ class Model():
 
         b[self.N] = -2*self.insert_interval(self.N,j)/self.alpha[self.N]/self.a**2
 
-        C = np.matmul(np.linalg.inv(A), b)#*self.a**2/(self.L_p**2*self.l_b)
+        C = np.matmul(np.linalg.inv(A), b)
 
         return C
 
@@ -202,11 +207,11 @@ class Model():
         A[self.N, self.N] = self.alph(1,self.N)/self.alph(-1,self.N)*(self.beta(-1,self.N)*self.L_p[self.N]/self.a+self.eps(-1,self.N)) - self.beta(1,self.N)*self.L_p[self.N]/self.a - self.eps(1,self.N)
         b[self.N] = -2*self.insert_interval(self.N,j)/self.alpha[self.N]/self.a**2
 
-        C = np.matmul(np.linalg.inv(A), b)#*self.a**2/(self.L_p**2*self.l_b)
+        C = np.matmul(np.linalg.inv(A), b)
 
         return C
 
-    # Determine S and F fractions
+    # Determine S and F fractions using the transfer matrix (see report for details)
     def P_j(self, E, j):
         m = 2
         n = 1.62
@@ -235,6 +240,7 @@ class Model():
 
             # Calc for each interval i
             for i in range(1,self.N+1):
+                # print(i, j, C_res[i], self.v_d[i-1]-self.v_d[i],-self.v_d[i]*C_res[i] + self.v_d[i-1]*C_res[i-1])
                 T_ij[i-1,j-1] = C_der_res[i]-C_der_res[i-1] + (i==j) - self.v_d[i]*C_res[i] + self.v_d[i-1]*C_res[i-1]
 
         self.T_ij_calc = T_ij
@@ -257,6 +263,8 @@ class Model():
     def W(self, E):
         return np.sum(self.W_i*self.T_i(self.T_ij_calc, E)) + self.T_surf(E)*self.W_surf
     
+    # These fit procedures could be used to use a fitting algorithm to fit S and W
+    ##### WARNING: THESE FITNESS FUNCTIONS SHOULD BE UPDATED WHEN THE LAYERS BECOME CUSTOMIZABLE
     def S_fit(self, E, S_al, S_alsio, S_sio, S_siosi, S_si, S_surf):
         self.S_i = np.zeros(self.N)
         self.S_i[self.Al_index] = S_al
@@ -283,20 +291,23 @@ class Model():
 
 
 if __name__ == "__main__":
+    # Everything below is just for testing purposes
+
     model = Model()
-    model.T_ij()
+    # model.T_ij()
     # print(model.T_ij_calc[0])
 
-    # model2 = Model()
-    # model2.EV = np.zeros(model2.N+1)
-    # model2.EV[18:23] = 30
-    # # print(model2.EV)
-    # model2.update_val()
+    model2 = Model()
+    model2.EV = np.zeros(model2.N+1)
+    model2.EV[model.Sio_index] = 300
+    # print(model2.EV)
+    model2.update_val()
     # model2.T_ij()
 
-    # model3 = Model()
-    # model3.EV = np.array([-300]*(model3.N+1))
-    # model3.update_val()
+    model3 = Model()
+    model3.EV = np.zeros(model3.N+1)
+    model3.EV[model.Sio_index] = 3000
+    model3.update_val()
     # model3.T_ij()
 
     # print(np.trapz(model.C_deriv(48), model.z*model.a))
@@ -305,7 +316,9 @@ if __name__ == "__main__":
     plt.figure()
     # plt.plot(0.0075*(model.C(14)[:-1]-model.C(14)[1:]))
     # plt.plot(model.C_deriv(14)[1:]-model.C_deriv(14)[:-1])
-    plt.plot(model.z*model.a, model.C_deriv(25))
+    plt.plot(model.z*model.a, model.C(20),label="0")
+    plt.plot(model.z*model.a, model2.C(20),label="300")
+    plt.plot(model.z*model.a, model3.C(20),label="3000")
     # plt.plot(model.z*model.a, model.C(45))
     # plt.plot(model.z*model.a,model.C_deriv(25))
     # plt.plot(np.arange(1,31), model.T_ij_calc[0], label="EV = 0")
@@ -324,61 +337,61 @@ if __name__ == "__main__":
     plt.xlabel("z (nm)")
     plt.ylabel("C'*")
     plt.xlim(0,2000)
-    # plt.legend()
+    plt.legend()
     plt.xlim(left=0)
     # plt.ylim(bottom=0)
     plt.grid()
     plt.show()
 
-    # print(np.sum([model.P_j(20,j) for j in np.arange(31)]))
-    exp_data = np.loadtxt("../exp data.csv", delimiter=",", skiprows=1)
-    print(exp_data)
-    E_data = exp_data[:,0]
-    W_data = exp_data[:,1]
-    S_data = exp_data[:,2]
-    # print(E_data, W_data)
+    # # print(np.sum([model.P_j(20,j) for j in np.arange(31)]))
+    # exp_data = np.loadtxt("../exp data.csv", delimiter=",", skiprows=1)
+    # print(exp_data)
+    # E_data = exp_data[:,0]
+    # W_data = exp_data[:,1]
+    # S_data = exp_data[:,2]
+    # # print(E_data, W_data)
 
-    # print()
-    # E_data = np.fromstring(E_data.replace('\n',','),sep=",")
-    # W_data = np.fromstring(W_data.replace('\n',','),sep=",")
-    # S_data = np.fromstring(S_data.replace('\n',','),sep=",")
+    # # print()
+    # # E_data = np.fromstring(E_data.replace('\n',','),sep=",")
+    # # W_data = np.fromstring(W_data.replace('\n',','),sep=",")
+    # # S_data = np.fromstring(S_data.replace('\n',','),sep=",")
 
-    E = np.linspace(.1,25,1000)
+    # E = np.linspace(.1,25,1000)
 
-    # poptS,pcovS = curve_fit(model.S_fit, E_data, S_data, bounds=(0.3,0.7), p0=[0.61,0.556,0.5499,0.576,0.57])
-    # poptW,pcovW = curve_fit(model.W_fit, E_data, W_data, bounds=(0,0.1), p0=[0.025, 0.054, 0.027, 0.027, 0.032])
+    # # poptS,pcovS = curve_fit(model.S_fit, E_data, S_data, bounds=(0.3,0.7), p0=[0.61,0.556,0.5499,0.576,0.57])
+    # # poptW,pcovW = curve_fit(model.W_fit, E_data, W_data, bounds=(0,0.1), p0=[0.025, 0.054, 0.027, 0.027, 0.032])
 
-    # print(poptS, poptW)
-    # model.S_fit(E_data, *poptS)
-    # model.W_fit(E_data, *poptW)
+    # # print(poptS, poptW)
+    # # model.S_fit(E_data, *poptS)
+    # # model.W_fit(E_data, *poptW)
 
-    # print(model.T_ij_calc[25])
+    # # print(model.T_ij_calc[25])
 
-    # # np.savetxt("int.csv",T_ij_calc)
-    # # print(T_ij_calc)
-    # # print(T_i, S(np.array([0.5]*N), 0, 20))
+    # # # np.savetxt("int.csv",T_ij_calc)
+    # # # print(T_ij_calc)
+    # # # print(T_i, S(np.array([0.5]*N), 0, 20))
 
-    # # print(np.sum(T(20)))
-    # model.T_i(model.T_ij_calc, 20)
-
-    plt.figure()
-    # plt.plot(E, [np.sum([model.P_j(e,j) for j in np.arange(model.N+1)]) for e in E])
-    # plt.plot(E, [model.T_surf(e) for e in E])
-    # plt.plot(E_data, S_data)
-    # plt.plot(E_data, [model.S(e) for e in E_data])
-    plt.plot([model.S(e) for e in E_data], [model.W(e) for e in E_data], label="EV=0")
-    # plt.plot([model2.S(e) for e in E], [model2.W(e) for e in E], label="EV=3")
-    plt.plot(S_data, W_data, label="Experiment 0V")
-    # plt.plot(E, [model2.S(e) for e in E], label="EV=300")
-    # plt.plot(E, [model3.S(e) for e in E], label="EV=-300")
-    # plt.plot(E, [model.F(e) for e in E])
-    # plt.plot([model.F(e) for e in E], [model.S(e) for e in E])
-    plt.xlabel("S")
-    plt.ylabel("W")
-    plt.legend()
-    plt.show()
+    # # # print(np.sum(T(20)))
+    # # model.T_i(model.T_ij_calc, 20)
 
     # plt.figure()
-    # plt.plot(E_data, W_data)
-    # plt.plot(E_data, [model.W(e) for e in E_data])
+    # # plt.plot(E, [np.sum([model.P_j(e,j) for j in np.arange(model.N+1)]) for e in E])
+    # # plt.plot(E, [model.T_surf(e) for e in E])
+    # # plt.plot(E_data, S_data)
+    # # plt.plot(E_data, [model.S(e) for e in E_data])
+    # plt.plot([model.S(e) for e in E_data], [model.W(e) for e in E_data], label="EV=0")
+    # # plt.plot([model2.S(e) for e in E], [model2.W(e) for e in E], label="EV=3")
+    # plt.plot(S_data, W_data, label="Experiment 0V")
+    # # plt.plot(E, [model2.S(e) for e in E], label="EV=300")
+    # # plt.plot(E, [model3.S(e) for e in E], label="EV=-300")
+    # # plt.plot(E, [model.F(e) for e in E])
+    # # plt.plot([model.F(e) for e in E], [model.S(e) for e in E])
+    # plt.xlabel("S")
+    # plt.ylabel("W")
+    # plt.legend()
     # plt.show()
+
+    # # plt.figure()
+    # # plt.plot(E_data, W_data)
+    # # plt.plot(E_data, [model.W(e) for e in E_data])
+    # # plt.show()
